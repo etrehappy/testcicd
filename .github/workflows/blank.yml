@@ -26,7 +26,6 @@ jobs:
           mklink /J "%GITHUB_WORKSPACE%\ProjectCiCdTest" "%UE_Projects%\TestCiCd"
         shell: cmd
 
-
       - name: Check if project files changed
         id: changes
         shell: pwsh
@@ -39,8 +38,7 @@ jobs:
           } else {
             echo "changed=false" >> $env:GITHUB_OUTPUT
           }
-
-
+      
       - name: Build Development Editor (Win64)
         shell: cmd
         run: |

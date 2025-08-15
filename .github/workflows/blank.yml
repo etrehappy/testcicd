@@ -29,14 +29,17 @@ jobs:
 
       - name: Check if project files changed
         id: changes
+        shell: pwsh
         run: |
           git fetch origin ${{ github.base_ref }} --depth=1
           git diff --name-only origin/${{ github.base_ref }} HEAD > changed_files.txt
-          if findstr /R /C:"^CiCdProject/Source/" /C:"^CiCdProject/Config/" changed_files.txt > nul; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
+          $changed = Select-String -Path "changed_files.txt" -Pattern "^CiCdProject/Source/", "^CiCdProject/Config/"
+          if ($changed) {
+            echo "changed=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "changed=false" >> $env:GITHUB_OUTPUT
+          }
+
 
       - name: Build Development Editor (Win64)
         shell: cmd

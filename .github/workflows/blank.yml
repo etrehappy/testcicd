@@ -20,6 +20,51 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
+      - name: Link local project (Windows junction)
+        run: |
+          rmdir /S /Q "%GITHUB_WORKSPACE%\ProjectCiCdTest" || true
+          mklink /J "%GITHUB_WORKSPACE%\ProjectCiCdTest" "%UE_Projects%\TestCiCd"
+        shell: cmd
+
+
+      - name: Build Development Editor (Win64)
+        shell: cmd
+        run: |
+          set UE_BUILD_BAT="%UE_git_5_6%\Build\BatchFiles\Build.bat"
+          set TARGET=CiCdProjectEditor Win64 Development
+          set UPROJ="%GITHUB_WORKSPACE%\CiCdProject\CiCdProject.uproject"
+          %UE_BUILD_BAT% %TARGET% %UPROJ% -waitmutex -NoHotReload
+
+
+      - name: Run Automation Tests
+        shell: cmd
+        run: |
+          "%UE_git_5_6%\Binaries\Win64\UnrealEditor-Cmd.exe" ^
+            "%GITHUB_WORKSPACE%\CiCdProject\CiCdProject.uproject" ^
+            -nosplash -unattended -nullrhi ^
+            -ExecCmds="Automation RunTests TrainingTests.Simple;Quit" ^
+            -ReportExportPath="%GITHUB_WORKSPACE%\TestReports" ^
+            -log
+
+
+      - name: Check test reports (fail on test fail)
+        shell: pwsh
+        run: |
+          $reportDir = "$env:GITHUB_WORKSPACE\TestReports"
+          if (-not (Test-Path $reportDir)) { Write-Error "No report dir"; exit 1 }
+          $files = Get-ChildItem -Path $reportDir -Recurse -Include *.json,*.xml,*.html -ErrorAction SilentlyContinue
+          if (-not $files) { Write-Error "No report files found"; exit 1 }
+          $failed = $false
+          foreach ($f in $files) {
+            $content = Get-Content $f.FullName -Raw
+            if ($content -match 'Failed' -or $content -match '"Result"\s*:\s*"Failed"' -or $content -match 'OverallResult.*Failed') {
+              Write-Host "Failure marker found in $($f.FullName)"
+              $failed = $true
+            }
+          }
+          if ($failed) { exit 1 } else { Write-Host "All tests passed."; exit 0 }
+
+
       # Runs a single command using the runners shell
       - name: Run a one-line script
         run: echo Hello, world!

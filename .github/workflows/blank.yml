@@ -30,14 +30,43 @@ jobs:
         id: changes
         shell: pwsh
         run: |
-          git fetch origin ${{ github.base_ref }} --depth=1
-          git diff --name-only origin/${{ github.base_ref }} HEAD > changed_files.txt
-          $changed = Select-String -Path "changed_files.txt" -Pattern "^CiCdProject/Source/", "^CiCdProject/Config/"
-          if ($changed) {
+          # Попытка определить "базовую" ветку для сравнения:
+          $base = $env:GITHUB_BASE_REF
+          if (-not $base -or $base -eq '') {
+            # если нет GITHUB_BASE_REF (workflow_dispatch или push), попробуем получить имя ветки из GITHUB_REF
+            if ($env:GITHUB_REF -and $env:GITHUB_REF -match 'refs/heads/(.+)$') {
+              $base = $Matches[1]
+            } else {
+              # запасной вариант — использовать main (подставьте вашу основную ветку, если она отличается)
+              $base = 'main'
+            }
+          }
+
+          Write-Host "Base branch for comparison: $base"
+
+          # Забираем конкретную ветку из origin (гарантируем, что origin/$base существует)
+          git fetch origin $base --depth=1
+
+          # Выполняем diff между origin/<base> и текущим HEAD
+          git diff --name-only origin/$base HEAD | Out-File -FilePath changed_files.txt -Encoding utf8
+
+          Write-Host "Changed files:"
+          Get-Content changed_files.txt | ForEach-Object { Write-Host $_ }
+
+          # Ищем изменения в интересующих путях (регэксп, Windows-стиль путей)
+          $pattern1 = '^CiCdProject/Source/'
+          $pattern2 = '^CiCdProject/Config/'
+
+          $hasChanges = Select-String -Path "changed_files.txt" -Pattern $pattern1, $pattern2 -Quiet
+
+          if ($hasChanges) {
+            Write-Host "Project files changed."
             echo "changed=true" >> $env:GITHUB_OUTPUT
           } else {
+            Write-Host "No project changes detected."
             echo "changed=false" >> $env:GITHUB_OUTPUT
           }
+
       
       - name: Build Development Editor (Win64)
         shell: cmd

@@ -26,10 +26,10 @@ jobs:
 
       - name: Set multiple env variables        
         run: |
-          $basePath = "$env:UE_Projects\TestCiCd\"
+          $basePath = "$env:UE_Projects\TestCiCd"
 
           $vars = @{
-            RUNNER_REPO_DIR = $basePath"
+            RUNNER_REPO_DIR = $basePath
             RUNNER_PROJECT_DIR = "$basePath\$env:PROJECT_NAME"            
           }
 

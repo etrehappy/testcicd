@@ -10,6 +10,9 @@ env:
   BUILD_TARGET_NAME: CiCdProjectEditor #CiCdProject CiCdProjectClient CiCdProjectServer
   BUILD_PLATFORM: Win64  
   PROJECT_NAME: CiCdProject
+  SHOULD_BUILDING: true
+
+
 
 jobs: 
   build:
@@ -30,19 +33,15 @@ jobs:
 
           $vars = @{
             RUNNER_REPO_DIR = $basePath
-            RUNNER_PROJECT_DIR = "$basePath\$env:PROJECT_NAME"            
+            RUNNER_PROJECT_DIR = "$basePath\$env:PROJECT_NAME"
+            RUNNER_BUILD_BAT = "$env:UE_git_5_6\Build\BatchFiles\Build.bat"
+            RUNNER_UPROJECT_PATH = "$env:RUNNER_PROJECT_DIR\$env:PROJECT_NAME.uproject"         
           }
 
           foreach ($key in $vars.Keys) {
             "$key=$($vars[$key])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           } 
-
-      # - name: Link local project (Windows junction)
-      #   run: |
-      #     rmdir /S /Q "%GITHUB_WORKSPACE%\ProjectCiCdTest" || true
-      #     mklink /J "%GITHUB_WORKSPACE%\ProjectCiCdTest" "%UE_Projects%\TestCiCd"
-      #   shell: cmd
-
+ 
       - name: Check if project files changed
         id: changes
         working-directory: ${{ env.RUNNER_PROJECT_DIR }} 
@@ -76,75 +75,11 @@ jobs:
             echo "changed=false" >> $env:GITHUB_OUTPUT
           }
 
-      # git fetch origin $base --depth=1
-      # $changed = git diff --name-only origin/$base HEAD |
-      #   Where-Object { $_ -match '^$env:PROJECT_NAME/(Source|Config)/' }
 
-      # if ($changed) 
-      # {
-      #   echo "changed=true" >> $env:GITHUB_OUTPUT
-      # } 
-      # else 
-      # {
-      #   echo "changed=false" >> $env:GITHUB_OUTPUT
-      # }
-
-
-      # - name: Check if project files changed
-      #   id: changes
-      #   shell: pwsh
-      #   run: |
-      #     # Попытка определить "базовую" ветку для сравнения:
-      #     $base = $env:GITHUB_BASE_REF
-      #     if (-not $base -or $base -eq '') {
-      #       # если нет GITHUB_BASE_REF (workflow_dispatch или push), попробуем получить имя ветки из GITHUB_REF
-      #       if ($env:GITHUB_REF -and $env:GITHUB_REF -match 'refs/heads/(.+)$') {
-      #         $base = $Matches[1]
-      #       } else {
-      #         # запасной вариант — использовать main (подставьте вашу основную ветку, если она отличается)
-      #         $base = 'main'
-      #       }
-      #     }
-
-      #     Write-Host "Base branch for comparison: $base"
-
-      #     # Забираем конкретную ветку из origin (гарантируем, что origin/$base существует)
-      #     git fetch origin $base --depth=1
-
-      #     # Выполняем diff между origin/<base> и текущим HEAD
-      #     git diff --name-only origin/$base HEAD | Out-File -FilePath changed_files.txt -Encoding utf8
-
-      #     Write-Host "Changed files:"
-      #     Get-Content changed_files.txt | ForEach-Object { Write-Host $_ }
-
-      #     # Ищем изменения в интересующих путях (регэксп, Windows-стиль путей)
-      #     $pattern1 = '^CiCdProject/Source/'
-      #     $pattern2 = '^CiCdProject/Config/'
-
-      #     $hasChanges = Select-String -Path "changed_files.txt" -Pattern $pattern1, $pattern2 -Quiet
-
-      #     if ($hasChanges) {
-      #       Write-Host "Project files changed."
-      #       echo "changed=true" >> $env:GITHUB_OUTPUT
-      #     } else {
-      #       Write-Host "No project changes detected."
-      #       echo "changed=false" >> $env:GITHUB_OUTPUT
-      #     }
-
-      
-
-
-
-
-
-      # - name: Build Development Editor (Win64)
-      #   if: steps.changes.outputs.changed == 'true'
-      #   shell: cmd
-      #   run: |
-      #     set UE_BUILD_BAT="%UE_git_5_6%\Build\BatchFiles\Build.bat"
-      #     set TARGET=CiCdProjectEditor Win64 Development
-      #     set UPROJ="%GITHUB_WORKSPACE%\CiCdProject\CiCdProject.uproject"
-      #     %UE_BUILD_BAT% %TARGET% %UPROJ% -waitmutex -NoHotReload
+      - name: Build Development Editor (Win64)
+        if: steps.changes.outputs.changed == 'true' && $env:SHOULD_BUILDING == 'true'
+        run: |  
+          $env:RUNNER_BUILD_BAT $env:BUILD_TARGET_NAME $env:BUILD_PLATFORM $env:BUILD_CONFIG $env:RUNNER_UPROJECT_PATH -waitmutex -NoHotReload
 
 
       # - name: Run Automation Tests

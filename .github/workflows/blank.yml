@@ -2,20 +2,13 @@
 
 name: CI
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
-jobs:
-  # This workflow contains a single job called "build"
+jobs: 
   build:
-    # The type of runner that the job will run on
     runs-on: self-hosted
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
@@ -30,45 +23,62 @@ jobs:
         id: changes
         shell: pwsh
         run: |
-          # Попытка определить "базовую" ветку для сравнения:
-          $base = $env:GITHUB_BASE_REF
-          if (-not $base -or $base -eq '') {
-            # если нет GITHUB_BASE_REF (workflow_dispatch или push), попробуем получить имя ветки из GITHUB_REF
-            if ($env:GITHUB_REF -and $env:GITHUB_REF -match 'refs/heads/(.+)$') {
-              $base = $Matches[1]
-            } else {
-              # запасной вариант — использовать main (подставьте вашу основную ветку, если она отличается)
-              $base = 'main'
-            }
-          }
-
-          Write-Host "Base branch for comparison: $base"
-
-          # Забираем конкретную ветку из origin (гарантируем, что origin/$base существует)
+          $base = if ($env:GITHUB_BASE_REF) { $env:GITHUB_BASE_REF } else { 'main' }
           git fetch origin $base --depth=1
+          $changed = git diff --name-only origin/$base HEAD |
+            Where-Object { $_ -match '^CiCdProject/(Source|Config)/' }
 
-          # Выполняем diff между origin/<base> и текущим HEAD
-          git diff --name-only origin/$base HEAD | Out-File -FilePath changed_files.txt -Encoding utf8
-
-          Write-Host "Changed files:"
-          Get-Content changed_files.txt | ForEach-Object { Write-Host $_ }
-
-          # Ищем изменения в интересующих путях (регэксп, Windows-стиль путей)
-          $pattern1 = '^CiCdProject/Source/'
-          $pattern2 = '^CiCdProject/Config/'
-
-          $hasChanges = Select-String -Path "changed_files.txt" -Pattern $pattern1, $pattern2 -Quiet
-
-          if ($hasChanges) {
-            Write-Host "Project files changed."
+          if ($changed) {
             echo "changed=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "No project changes detected."
             echo "changed=false" >> $env:GITHUB_OUTPUT
           }
 
+
+      # - name: Check if project files changed
+      #   id: changes
+      #   shell: pwsh
+      #   run: |
+      #     # Попытка определить "базовую" ветку для сравнения:
+      #     $base = $env:GITHUB_BASE_REF
+      #     if (-not $base -or $base -eq '') {
+      #       # если нет GITHUB_BASE_REF (workflow_dispatch или push), попробуем получить имя ветки из GITHUB_REF
+      #       if ($env:GITHUB_REF -and $env:GITHUB_REF -match 'refs/heads/(.+)$') {
+      #         $base = $Matches[1]
+      #       } else {
+      #         # запасной вариант — использовать main (подставьте вашу основную ветку, если она отличается)
+      #         $base = 'main'
+      #       }
+      #     }
+
+      #     Write-Host "Base branch for comparison: $base"
+
+      #     # Забираем конкретную ветку из origin (гарантируем, что origin/$base существует)
+      #     git fetch origin $base --depth=1
+
+      #     # Выполняем diff между origin/<base> и текущим HEAD
+      #     git diff --name-only origin/$base HEAD | Out-File -FilePath changed_files.txt -Encoding utf8
+
+      #     Write-Host "Changed files:"
+      #     Get-Content changed_files.txt | ForEach-Object { Write-Host $_ }
+
+      #     # Ищем изменения в интересующих путях (регэксп, Windows-стиль путей)
+      #     $pattern1 = '^CiCdProject/Source/'
+      #     $pattern2 = '^CiCdProject/Config/'
+
+      #     $hasChanges = Select-String -Path "changed_files.txt" -Pattern $pattern1, $pattern2 -Quiet
+
+      #     if ($hasChanges) {
+      #       Write-Host "Project files changed."
+      #       echo "changed=true" >> $env:GITHUB_OUTPUT
+      #     } else {
+      #       Write-Host "No project changes detected."
+      #       echo "changed=false" >> $env:GITHUB_OUTPUT
+      #     }
+
       
       - name: Build Development Editor (Win64)
+        if: steps.changes.outputs.changed == 'true'
         shell: cmd
         run: |
           set UE_BUILD_BAT="%UE_git_5_6%\Build\BatchFiles\Build.bat"

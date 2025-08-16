@@ -56,42 +56,12 @@ jobs:
 
           Write-Host "Event: $env:GITHUB_EVENT_NAME, Branch: $branch"
 
-          # ensure we have the base branch refs locally
-          git fetch origin $branch --depth=1
-
-          # compute changed files depending on event type
-          if ($env:GITHUB_EVENT_NAME -eq 'push') {
-
-            # try diff between HEAD^ and HEAD; 
-            $hasParent = (git rev-parse --verify HEAD^ 2>$null) -ne $null
-
-            if ($hasParent) {
-              #get a list of files modified in the last commit
-              $changedFiles = git diff --name-only HEAD^..HEAD
-
-            } else {
-              #if this is the first commit, take all files
-              $changedFiles = git ls-tree -r --name-only HEAD
-            }
-          } else {
-            # pull_request / workflow_dispatch / others - compare with the base branch
-            $changedFiles = git diff --name-only origin/$branch..HEAD
-          }
+          $changedFiles = git diff --name-only HEAD -- "$env.RUNNER_PROJECT_DIR\Source" "$env.RUNNER_PROJECT_DIR\Config"
 
           Write-Host "Changed files:"
           $changedFiles | ForEach-Object { Write-Host "  $_" }
 
-          #  looking for changes in Source/Config (in the root or inside subfolders).
-          $found = $false
-          foreach ($f in $changedFiles) {
-            if ($f -match '(^|/)Source/' -or $f -match '(^|/)Config/') {
-              Write-Host "Match: $f"
-              $found = $true
-              break
-            }
-          }
-
-          if ($found) {
+          if ($changedFiles) {
             Write-Host "=> project Source/Config changed"
             echo "changed=true" >> $env:GITHUB_OUTPUT
           } else {

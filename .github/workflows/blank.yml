@@ -77,7 +77,7 @@ jobs:
 
 
       - name: Build Development Editor (Win64)
-        if: steps.changes.outputs.changed == 'true' && $env:SHOULD_BUILDING == "true"
+        if: steps.changes.outputs.changed == 'true' && ${{ env.SHOULD_BUILDING }} == "true"
         run: |  
           $env:RUNNER_BUILD_BAT $env:BUILD_TARGET_NAME $env:BUILD_PLATFORM $env:BUILD_CONFIG $env:RUNNER_UPROJECT_PATH -waitmutex -NoHotReload
 

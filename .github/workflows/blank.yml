@@ -56,16 +56,23 @@ jobs:
 
           Write-Host "Event: $env:GITHUB_EVENT_NAME, Branch: $branch"
 
-          $changedFiles = git diff --name-only HEAD -- "$env.RUNNER_PROJECT_DIR\Source" "$env.RUNNER_PROJECT_DIR\Config"
+          $changedFiles = git diff --name-only HEAD^..HEAD
 
           Write-Host "Changed files:"
           $changedFiles | ForEach-Object { Write-Host "  $_" }
 
-          if ($changedFiles) {
-            Write-Host "=> project Source/Config changed"
+          $found = $false
+          foreach ($f in $changedFiles) {
+            if ($f -match '(^|/)(Source|Config)/') {
+              Write-Host "Matched: $f"
+              $found = $true
+              break
+            }
+          }
+
+          if ($found) {
             echo "changed=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Host "=> no Source/Config changes"
             echo "changed=false" >> $env:GITHUB_OUTPUT
           }
 

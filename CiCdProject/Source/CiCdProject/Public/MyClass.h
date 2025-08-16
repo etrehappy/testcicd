@@ -3,13 +3,19 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/Object.h"
+#include "MyClass.generated.h"
 
 /**
  * 
  */
-class CICDPROJECT_API MyClass
+UCLASS(Blueprintable)
+class CICDPROJECT_API AMyClass : public AActor
 {
+	GENERATED_BODY()
+
 public:
-	MyClass();
-	~MyClass();
+
+	AMyClass();
+	virtual ~AMyClass();
 };

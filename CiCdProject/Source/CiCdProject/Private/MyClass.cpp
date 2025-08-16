@@ -4,10 +4,10 @@
 #include "MyClass.h"
 
 
-MyClass::MyClass()
+AMyClass::AMyClass()
 {
 }
 
-MyClass::~MyClass()
+AMyClass::~AMyClass()
 {
 }

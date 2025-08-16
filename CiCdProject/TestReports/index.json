@@ -1,0 +1,57 @@
+﻿{
+	"devices": [
+		{
+			"deviceName": "NVME1TB",
+			"instance": "47CE1F914C68BC5E4A4B649A314A94F2",
+			"instanceName": "NVME1TB-24160",
+			"platform": "WindowsEditor",
+			"oSVersion": "Windows 11 (24H2) [10.0.26100.4946] ",
+			"model": "Default",
+			"gPU": "NVIDIA GeForce RTX 3060 Ti",
+			"cPUModel": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+			"rAMInGB": 32,
+			"renderMode": "SM6",
+			"rHI": "",
+			"appInstanceLog": ""
+		}
+	],
+	"reportCreatedOn": "2025.08.16-17.37.13",
+	"succeeded": 2,
+	"succeededWithWarnings": 0,
+	"failed": 0,
+	"notRun": 0,
+	"inProcess": 0,
+	"totalDuration": 1.1188523769378662,
+	"comparisonExported": false,
+	"comparisonExportDirectory": "",
+	"tests": [
+		{
+			"testDisplayName": "SimpleTest",
+			"fullTestPath": "ModuleTests.SimpleTest",
+			"state": "Success",
+			"deviceInstance": [
+				"47CE1F914C68BC5E4A4B649A314A94F2"
+			],
+			"duration": 0.0012288987636566162,
+			"dateTime": "2025.08.16-17.37.11",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		},
+		{
+			"testDisplayName": "GetActor",
+			"fullTestPath": "TrainingTests.PIE.GetActor",
+			"state": "Success",
+			"deviceInstance": [
+				"47CE1F914C68BC5E4A4B649A314A94F2"
+			],
+			"duration": 1.1176234483718872,
+			"dateTime": "2025.08.16-17.37.11",
+			"entries": [],
+			"warnings": 0,
+			"errors": 0,
+			"artifacts": []
+		}
+	]
+}

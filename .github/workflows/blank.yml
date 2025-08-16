@@ -5,34 +5,112 @@ name: CI
 on:
   workflow_dispatch:
 
+env:
+  BUILD_CONFIG: Development #Shipping
+  BUILD_TARGET_NAME: CiCdProjectEditor #CiCdProject CiCdProjectClient CiCdProjectServer
+  BUILD_PLATFORM: Win64  
+  PROJECT_NAME: CiCdProject
+
 jobs: 
   build:
     runs-on: self-hosted
     
+    defaults:
+      run:
+        shell: pwsh
+        # working-directory: ${{ env.RUNNER_PROJECT_DIR }} /*! It will declaration on the next step*/
+
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      #- uses: actions/checkout@v4
 
-      - name: Link local project (Windows junction)
+      - name: Set multiple env variables        
         run: |
-          rmdir /S /Q "%GITHUB_WORKSPACE%\ProjectCiCdTest" || true
-          mklink /J "%GITHUB_WORKSPACE%\ProjectCiCdTest" "%UE_Projects%\TestCiCd"
-        shell: cmd
+          $basePath = "$env:UE_Projects\TestCiCd\"
+
+          $vars = @{
+            RUNNER_REPO_DIR = $basePath"
+            RUNNER_PROJECT_DIR = "$basePath\$env:PROJECT_NAME"            
+          }
+
+          foreach ($key in $vars.Keys) {
+            "$key=$($vars[$key])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } 
+
+      # - name: Link local project (Windows junction)
+      #   run: |
+      #     rmdir /S /Q "%GITHUB_WORKSPACE%\ProjectCiCdTest" || true
+      #     mklink /J "%GITHUB_WORKSPACE%\ProjectCiCdTest" "%UE_Projects%\TestCiCd"
+      #   shell: cmd
 
       - name: Check if project files changed
         id: changes
-        shell: pwsh
-        run: |
-          $base = if ($env:GITHUB_BASE_REF) { $env:GITHUB_BASE_REF } else { 'main' }
-          git fetch origin $base --depth=1
-          $changed = git diff --name-only origin/$base HEAD |
-            Where-Object { $_ -match '^CiCdProject/(Source|Config)/' }
+        working-directory: ${{ env.RUNNER_PROJECT_DIR }} 
+        run: |             
+          # sets branch name for check
+          $branch = if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+                      $env:GITHUB_BASE_REF
+                  } else {
+                      $env:GITHUB_REF -replace '^refs/heads/', ''
+                  }
 
-          if ($changed) {
+          Write-Host "Event: $env:GITHUB_EVENT_NAME, Branch: $branch"
+
+          # ensure we have the base branch refs locally
+          git fetch origin $branch --depth=1
+
+          # compute changed files depending on event type
+          if ($env:GITHUB_EVENT_NAME -eq 'push') {
+
+            # try diff between HEAD^ and HEAD; 
+            $hasParent = (git rev-parse --verify HEAD^ 2>$null) -ne $null
+
+            if ($hasParent) {
+              #get a list of files modified in the last commit
+              $changedFiles = git diff --name-only HEAD^..HEAD
+
+            } else {
+              #if this is the first commit, take all files
+              $changedFiles = git ls-tree -r --name-only HEAD
+            }
+          } else {
+            # pull_request / workflow_dispatch / others - compare with the base branch
+            $changedFiles = git diff --name-only origin/$branch..HEAD
+          }
+
+          Write-Host "Changed files:"
+          $changedFiles | ForEach-Object { Write-Host "  $_" }
+
+          #  looking for changes in Source/Config (in the root or inside subfolders).
+          $found = $false
+          foreach ($f in $changedFiles) {
+            if ($f -match '(^|/)Source/' -or $f -match '(^|/)Config/') {
+              Write-Host "Match: $f"
+              $found = $true
+              break
+            }
+          }
+
+          if ($found) {
+            Write-Host "=> project Source/Config changed"
             echo "changed=true" >> $env:GITHUB_OUTPUT
           } else {
+            Write-Host "=> no Source/Config changes"
             echo "changed=false" >> $env:GITHUB_OUTPUT
           }
+
+      # git fetch origin $base --depth=1
+      # $changed = git diff --name-only origin/$base HEAD |
+      #   Where-Object { $_ -match '^$env:PROJECT_NAME/(Source|Config)/' }
+
+      # if ($changed) 
+      # {
+      #   echo "changed=true" >> $env:GITHUB_OUTPUT
+      # } 
+      # else 
+      # {
+      #   echo "changed=false" >> $env:GITHUB_OUTPUT
+      # }
 
 
       # - name: Check if project files changed
@@ -77,66 +155,63 @@ jobs:
       #     }
 
       
-      - name: Build Development Editor (Win64)
-        if: steps.changes.outputs.changed == 'true'
-        shell: cmd
-        run: |
-          set UE_BUILD_BAT="%UE_git_5_6%\Build\BatchFiles\Build.bat"
-          set TARGET=CiCdProjectEditor Win64 Development
-          set UPROJ="%GITHUB_WORKSPACE%\CiCdProject\CiCdProject.uproject"
-          %UE_BUILD_BAT% %TARGET% %UPROJ% -waitmutex -NoHotReload
 
 
-      - name: Run Automation Tests
-        shell: cmd
-        run: |
-          "%UE_git_5_6%\Binaries\Win64\UnrealEditor-Cmd.exe" ^
-            "%GITHUB_WORKSPACE%\CiCdProject\CiCdProject.uproject" ^
-            -nosplash -unattended -nullrhi ^
-            -ExecCmds="Automation RunTests TrainingTests.Simple;Quit" ^
-            -ReportExportPath="%GITHUB_WORKSPACE%\TestReports" ^
-            -log
 
 
-      - name: Check test reports (fail on test fail)
-        shell: pwsh
-        run: |
-          $reportDir = "$env:GITHUB_WORKSPACE\TestReports"
-          $jsonFiles = Get-ChildItem -Path $reportDir -Recurse -Include *.json
-          if (-not $jsonFiles) {
-            Write-Error "No JSON report files found"
-            exit 1
-          }
 
-          $failedTotal = 0
-          foreach ($file in $jsonFiles) {
-            $data = Get-Content $file.FullName -Raw | ConvertFrom-Json
-            if ($data.failed -gt 0) {
-              Write-Host "Test run failed: $($data.failed) tests failed."
-              $failedTotal += $data.failed
-            }
-            foreach ($test in $data.tests) {
-              if ($test.state -ne "Success") {
-                Write-Host "Test '$($test.fullTestPath)' failed with state: $($test.state)"
-                $failedTotal++
-              }
-            }
-          }
-
-          if ($failedTotal -gt 0) {
-            Write-Error "$failedTotal tests failed."
-            exit 1
-          } else {
-            Write-Host "All tests passed."
-          }
+      # - name: Build Development Editor (Win64)
+      #   if: steps.changes.outputs.changed == 'true'
+      #   shell: cmd
+      #   run: |
+      #     set UE_BUILD_BAT="%UE_git_5_6%\Build\BatchFiles\Build.bat"
+      #     set TARGET=CiCdProjectEditor Win64 Development
+      #     set UPROJ="%GITHUB_WORKSPACE%\CiCdProject\CiCdProject.uproject"
+      #     %UE_BUILD_BAT% %TARGET% %UPROJ% -waitmutex -NoHotReload
 
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      # - name: Run Automation Tests
+      #   shell: cmd
+      #   run: |
+      #     "%UE_git_5_6%\Binaries\Win64\UnrealEditor-Cmd.exe" ^
+      #       "%GITHUB_WORKSPACE%\CiCdProject\CiCdProject.uproject" ^
+      #       -nosplash -unattended -nullrhi ^
+      #       -ExecCmds="Automation RunTests TrainingTests.Simple;Quit" ^
+      #       -ReportExportPath="%GITHUB_WORKSPACE%\TestReports" ^
+      #       -log
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+
+      # - name: Check test reports (fail on test fail)
+      #   shell: pwsh
+      #   run: |
+      #     $reportDir = "$env:GITHUB_WORKSPACE\TestReports"
+      #     $jsonFiles = Get-ChildItem -Path $reportDir -Recurse -Include *.json
+      #     if (-not $jsonFiles) {
+      #       Write-Error "No JSON report files found"
+      #       exit 1
+      #     }
+
+      #     $failedTotal = 0
+      #     foreach ($file in $jsonFiles) {
+      #       $data = Get-Content $file.FullName -Raw | ConvertFrom-Json
+      #       if ($data.failed -gt 0) {
+      #         Write-Host "Test run failed: $($data.failed) tests failed."
+      #         $failedTotal += $data.failed
+      #       }
+      #       foreach ($test in $data.tests) {
+      #         if ($test.state -ne "Success") {
+      #           Write-Host "Test '$($test.fullTestPath)' failed with state: $($test.state)"
+      #           $failedTotal++
+      #         }
+      #       }
+      #     }
+
+      #     if ($failedTotal -gt 0) {
+      #       Write-Error "$failedTotal tests failed."
+      #       exit 1
+      #     } else {
+      #       Write-Host "All tests passed."
+      #     }
+
+
+
